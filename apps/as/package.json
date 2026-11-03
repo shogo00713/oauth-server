@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "argon2": "^0.45.1",
     "ejs": "catalog:",
     "express": "catalog:",
     "express-session": "catalog:",
     "helmet": "catalog:",
-    "jose": "catalog:"
+    "jose": "catalog:",
+    "zod": "catalog:"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",

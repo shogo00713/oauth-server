@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
 allowBuilds:
+  argon2: true
   esbuild: true
 catalog:
   ejs: ^7.0.2
@@ -8,3 +9,4 @@ catalog:
   express-session: ^1.19.0
   helmet: ^8.3.0
   jose: ^6.2.15
+  zod: ^4.6.7

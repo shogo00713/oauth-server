@@ -10,7 +10,7 @@
 | 役割 | 名前 | 識別子 | URL |
 |---|---|---|---|
 | AS | 認可サーバー | `auth` | `http://auth.simplememo.localhost:4000` |
-| RS | シンプルメモアプリ | `simplememo` | `http://simplememo.localhost:5000` |
+| RS | シンプルメモアプリ | `simplememo` | `http://simplememo.localhost:4002` |
 | client | メモボード | `memoboard` | `http://memoboard.localhost:4001` |
 
 - `iss` には、AS の URL を使用する
