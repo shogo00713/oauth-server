@@ -25,6 +25,13 @@ apps/as/src/
 - `login` : OAuth ログイン画面
 - `consent` : OAuth 認可同意画面
 
+### lib
+
+| ファイル名 | 機能 |　使用用途 |
+|---|---|---|
+| random.ts | ランダムなトークンの生成 | 認可コードなどの生成 |
+| pkce.ts | code_verifeir、code_challenge の形式と値の検証 | PKCE の検証 |
+
 
 ### 環境変数
 - `ISSUER`、`PORT`、`AUDIENCE`(`simple-memo`)
