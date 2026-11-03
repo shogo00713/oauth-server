@@ -17,7 +17,9 @@
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "test": "pnpm -r run test",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "format:check": "prettier --check \"apps/*/src/**/*.ts\"",
+    "format": "prettier --write \"apps/*/src/**/*.ts\""
   },
   "devEngines": {
     "packageManager": {
@@ -25,5 +27,9 @@
       "version": "12.16.1",
       "onFail": "download"
     }
+  },
+  "prettier": {
+    "singleQuote": true,
+    "tabWidth": 4
   }
 }
