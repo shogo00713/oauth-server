@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+allowBuilds:
+  esbuild: true
+catalog:
+  ejs: ^7.0.2
+  express: ^5.3.0
+  express-session: ^1.19.0
+  helmet: ^8.3.0
+  jose: ^6.2.15

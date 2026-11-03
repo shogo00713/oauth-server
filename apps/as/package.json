@@ -1,0 +1,19 @@
+{
+  "name": "@oauth/as",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ejs": "catalog:",
+    "express": "catalog:",
+    "express-session": "catalog:",
+    "helmet": "catalog:",
+    "jose": "catalog:"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  }
+}

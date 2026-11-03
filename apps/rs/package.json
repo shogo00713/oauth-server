@@ -1,0 +1,16 @@
+{
+  "name": "@oauth/rs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "catalog:",
+    "jose": "catalog:"
+  }
+}
