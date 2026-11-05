@@ -13,10 +13,11 @@
     "zod": "catalog:"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "gen:key": "tsx scripts/generate-key.ts"
+      "dev": "tsx watch --env-file=.env src/index.ts",
+      "demo": "tsx --env-file=.env src/demo.ts",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "typecheck": "tsc --noEmit",
+      "gen:key": "tsx scripts/generate-key.ts"
   }
 }
