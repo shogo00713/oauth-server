@@ -173,6 +173,19 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
                 expect(alice?.id).not.toBe(bob?.id);
             });
 
+            it('大文字小文字が違う username も、別の人(違う ID)', async () => {
+                const [lower] = await loadUsersFromEnv({
+                    ...validEnv(),
+                    USER_NAME: 'alice',
+                });
+                const [upper] = await loadUsersFromEnv({
+                    ...validEnv(),
+                    USER_NAME: 'ALICE',
+                });
+
+                expect(lower?.id).not.toBe(upper?.id);
+            });
+
             it('USER_NAME を省略した時の ID は、USER_NAME=demo と同じ(省略した時の名前が demo なので)', async () => {
                 const [omitted] = await loadUsersFromEnv(validEnv());
                 const [explicit] = await loadUsersFromEnv({
