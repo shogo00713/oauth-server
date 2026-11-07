@@ -421,6 +421,19 @@ describe('AUTHZ REQUEST RFC 6749 4.1.1 / 4.1.2.1 / RFC 7636 4.3', () => {
                 },
             );
 
+            it.each([
+                { name: '空白 (0x20)', value: 'a b' },
+                { name: '~ (0x7E)', value: 'a~b' },
+            ])(
+                '使える文字の端(RFC 6749 付録 A.5 は 0x20〜0x7E): $name',
+                ({ value }) => {
+                    const result = parse(withParams({ state: value }));
+
+                    expect(result.ok).toBe(true);
+                    if (result.ok) expect(result.value.state).toBe(value);
+                },
+            );
+
             it('エラーの時も、state が、そのまま返る', () => {
                 const result = parse(
                     withParams({ response_type: 'token', state: 'a b&c=d' }),
