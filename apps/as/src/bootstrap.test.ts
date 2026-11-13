@@ -7,9 +7,16 @@ import { join } from 'node:path';
 import { jwtVerify } from 'jose';
 import { bootstrap } from './bootstrap.js';
 import { sha256Hex } from './lib/hash.js';
+import { computeCodeChallenge } from './lib/pkce.js';
+import { generateRandomString } from './lib/random.js';
 import { importSigningKey } from './lib/signing-key.js';
+import { createClient, startServer } from './test-utils/http.js';
+import { authorizeInBrowser, exchangeCode } from './test-utils/oauth-flow.js';
+import { loadUsersFromEnv } from './users-from-env.js';
 
 const SECRET = 'a'.repeat(40);
+const SESSION_SECRET = 'b'.repeat(40);
+const USER_PASSWORD = 'a1b2c3d4e5f6';
 const KEY_PATH = '../../keys/as-private.pem';
 const REDIRECT_URI = 'http://localhost:3000/callback';
 const CODE = 'authorization-code-for-test';
@@ -25,6 +32,8 @@ const env = (
     SIGNING_KEY_PATH: KEY_PATH,
     CLIENT_SECRET: SECRET,
     CLIENT_REDIRECT_URIS: REDIRECT_URI,
+    SESSION_SECRET,
+    USER_PASSWORD,
     ...overrides,
 });
 
@@ -100,6 +109,53 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                 }
             });
 
+            it('最初から最後まで通る(画面でログインして、同意して、トークンが取れる。ユーザーは、環境変数の物)', async () => {
+                const { app } = await bootstrap(env(), {
+                    readFile: async () => pem,
+                });
+                const server = await startServer(app);
+                const browser = createClient(server.baseUrl);
+
+                try {
+                    const verifier = generateRandomString();
+                    const callback = await authorizeInBrowser(
+                        browser,
+                        {
+                            clientId: 'memoboard',
+                            redirectUri: REDIRECT_URI,
+                            codeChallenge: computeCodeChallenge(verifier),
+                            state: 'xyz',
+                        },
+                        { username: 'demo', password: USER_PASSWORD },
+                    );
+                    expect(callback.searchParams.get('state')).toBe('xyz');
+
+                    const token = await exchangeCode(server.baseUrl, {
+                        clientId: 'memoboard',
+                        clientSecret: SECRET,
+                        code: callback.searchParams.get('code') ?? '',
+                        redirectUri: REDIRECT_URI,
+                        codeVerifier: verifier,
+                    });
+
+                    expect(token.status).toBe(200);
+                    const { publicKey } = await importSigningKey(pem);
+                    const { payload } = await jwtVerify(
+                        String(token.json['access_token']),
+                        publicKey,
+                        {
+                            issuer: 'http://localhost:4000',
+                            audience: 'simple-memo',
+                        },
+                    );
+                    const [user] = await loadUsersFromEnv(env());
+                    expect(payload.sub).toBe(user?.id);
+                    expect(payload['scope']).toBe('read');
+                } finally {
+                    await server.close();
+                }
+            });
+
             it('config は、環境変数から作った物が返る', async () => {
                 const { config } = await bootstrap(env({ PORT: '4321' }), {
                     readFile: async () => pem,
@@ -144,6 +200,24 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                 await expect(
                     bootstrap(env({ CLIENT_SECRET: undefined }), { readFile }),
                 ).rejects.toThrow(/CLIENT_SECRET/);
+                expect(readFile).not.toHaveBeenCalled();
+            });
+
+            it('SESSION_SECRET が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
+                const readFile = vi.fn(async () => pem);
+
+                await expect(
+                    bootstrap(env({ SESSION_SECRET: undefined }), { readFile }),
+                ).rejects.toThrow(/SESSION_SECRET/);
+                expect(readFile).not.toHaveBeenCalled();
+            });
+
+            it('ユーザーの設定(USER_PASSWORD)が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
+                const readFile = vi.fn(async () => pem);
+
+                await expect(
+                    bootstrap(env({ USER_PASSWORD: undefined }), { readFile }),
+                ).rejects.toThrow(/USER_PASSWORD/);
                 expect(readFile).not.toHaveBeenCalled();
             });
 

@@ -1,11 +1,13 @@
 import { z } from 'zod';
-import { parseScope } from './scope.js';
+import { isSubsetScope, parseScope, SUPPORTED_SCOPES } from './scope.js';
+import { MIN_SESSION_SECRET_LENGTH } from './session.js';
 
 export type Config = {
     issuer: string;
     port: number;
     audience: string;
     signingKeyPath: string;
+    sessionSecret: string;
     codeTtlSec: number;
     accessTokenTtlSec: number;
     defaultScope: string[];
@@ -28,16 +30,24 @@ const scopeSchema = z
     .string()
     .default('read')
     .refine((value) => parseScope(value) !== null, 'スコープの形式が不正です')
-    .transform((value) => parseScope(value) ?? []);
+    .transform((value) => parseScope(value) ?? [])
+    .refine(
+        (scopes) => isSubsetScope(scopes, SUPPORTED_SCOPES),
+        'この AS が出せないスコープが含まれています',
+    );
 
 const schema = z.object({
     ISSUER: z.preprocess(emptyAsUnset, issuerSchema),
     PORT: z.preprocess(emptyAsUnset, z.coerce.number().int().min(1).max(65535)),
     SIGNING_KEY_PATH: z.preprocess(emptyAsUnset, z.string()),
+    SESSION_SECRET: z.preprocess(
+        emptyAsUnset,
+        z.string().min(MIN_SESSION_SECRET_LENGTH),
+    ),
     AUDIENCE: z.preprocess(emptyAsUnset, z.string().default('simple-memo')),
     CODE_TTL_SEC: z.preprocess(
         emptyAsUnset,
-        z.coerce.number().int().positive().default(60),
+        z.coerce.number().int().positive().max(600).default(60),
     ),
     ACCESS_TOKEN_TTL_SEC: z.preprocess(
         emptyAsUnset,
@@ -59,6 +69,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
         port: values.PORT,
         audience: values.AUDIENCE,
         signingKeyPath: values.SIGNING_KEY_PATH,
+        sessionSecret: values.SESSION_SECRET,
         codeTtlSec: values.CODE_TTL_SEC,
         accessTokenTtlSec: values.ACCESS_TOKEN_TTL_SEC,
         defaultScope: values.DEFAULT_SCOPE,

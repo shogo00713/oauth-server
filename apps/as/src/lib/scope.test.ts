@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseScope, isSubsetScope, formatScope } from './scope.js';
+import {
+    parseScope,
+    isSubsetScope,
+    formatScope,
+    SUPPORTED_SCOPES,
+} from './scope.js';
 
 describe('SCOPE RFC 6749', () => {
     describe('parseScope', () => {
@@ -137,6 +142,17 @@ describe('SCOPE RFC 6749', () => {
             it('許可が空配列', () => {
                 expect(isSubsetScope(['read'], [])).toBe(false);
             });
+        });
+    });
+
+    describe('SUPPORTED_SCOPES', () => {
+        it('read と write の 2 つ(spec/simple-memo.md の認可ルール)', () => {
+            expect([...SUPPORTED_SCOPES]).toEqual(['read', 'write']);
+        });
+
+        it('どれも、スコープとして正しい形', () => {
+            for (const scope of SUPPORTED_SCOPES)
+                expect(parseScope(scope)).toEqual([scope]);
         });
     });
 

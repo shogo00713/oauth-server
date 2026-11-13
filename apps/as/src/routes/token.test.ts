@@ -18,6 +18,7 @@ import type { Client } from '../stores/client-store.js';
 import type { AuthCodeRecord, CodeStore } from '../stores/code-store.js';
 import { createMemoryClientStore } from '../stores/memory-client-store.js';
 import { createMemoryCodeStore } from '../stores/memory-code-store.js';
+import { createMemoryUserStore } from '../stores/memory-user-store.js';
 
 const NOW = 1_700_000_000;
 const CLIENT_ID = 'memoboard';
@@ -35,6 +36,7 @@ const config: Config = {
     port: 4000,
     audience: 'simple-memo',
     signingKeyPath: 'unused',
+    sessionSecret: 's'.repeat(32),
     codeTtlSec: 60,
     accessTokenTtlSec: 600,
     defaultScope: ['read'],
@@ -171,6 +173,7 @@ beforeEach(async () => {
     server = await startApp({
         config,
         clientStore: createMemoryClientStore(clients),
+        userStore: createMemoryUserStore([]),
         codeStore,
         signingKey,
         now: () => clock.now,
@@ -244,6 +247,7 @@ describe('TOKEN ENDPOINT RFC 6749 4.1.3 / 5.1 / 5.2 / RFC 9068', () => {
                 const realClock = await startApp({
                     config,
                     clientStore: createMemoryClientStore(clients),
+                    userStore: createMemoryUserStore([]),
                     codeStore: realClockCodeStore,
                     signingKey,
                 });
@@ -541,6 +545,7 @@ describe('TOKEN ENDPOINT RFC 6749 4.1.3 / 5.1 / 5.2 / RFC 9068', () => {
                     const faulty = await startApp({
                         config,
                         clientStore: createMemoryClientStore(clients),
+                        userStore: createMemoryUserStore([]),
                         codeStore: faultyCodeStore,
                         signingKey,
                         now: () => NOW,

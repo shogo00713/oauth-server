@@ -44,3 +44,8 @@ export function formatScope(scopes: readonly string[]): string {
         throw new RangeError('スコープを1つ以上指定してください');
     return scopes.join(' ');
 }
+
+/**
+ * この AS が出せるスコープ(spec/simple-memo.md の認可ルール)
+ */
+export const SUPPORTED_SCOPES: readonly string[] = ['read', 'write'];

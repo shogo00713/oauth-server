@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { loadConfig } from './config.js';
+import session from 'express-session';
+
+const SESSION_SECRET = 'k'.repeat(32);
 
 const validEnv = (): Record<string, string | undefined> => ({
     ISSUER: 'http://localhost:4000',
     PORT: '4000',
     SIGNING_KEY_PATH: '../../keys/as-private.pem',
+    SESSION_SECRET,
 });
 
 const DEFAULT_CONFIG = {
@@ -12,6 +16,7 @@ const DEFAULT_CONFIG = {
     port: 4000,
     audience: 'simple-memo',
     signingKeyPath: '../../keys/as-private.pem',
+    sessionSecret: SESSION_SECRET,
     codeTtlSec: 60,
     accessTokenTtlSec: 600,
     defaultScope: ['read'],
@@ -38,7 +43,7 @@ const expectInvalid = (
 describe('CONFIG 環境変数の読み込み', () => {
     describe('loadConfig', () => {
         describe('読み込める例', () => {
-            it('必須の 3 つだけで、残りは既定値になる', () => {
+            it('必須の 4 つだけで、残りは既定値になる', () => {
                 expect(loadConfig(validEnv())).toEqual(DEFAULT_CONFIG);
             });
 
@@ -47,6 +52,7 @@ describe('CONFIG 環境変数の読み込み', () => {
                     ISSUER: 'https://as.example.com',
                     PORT: '8080',
                     SIGNING_KEY_PATH: '/etc/keys/private.pem',
+                    SESSION_SECRET: 'x'.repeat(64),
                     AUDIENCE: 'my-api',
                     CODE_TTL_SEC: '30',
                     ACCESS_TOKEN_TTL_SEC: '3600',
@@ -58,6 +64,7 @@ describe('CONFIG 環境変数の読み込み', () => {
                     port: 8080,
                     audience: 'my-api',
                     signingKeyPath: '/etc/keys/private.pem',
+                    sessionSecret: 'x'.repeat(64),
                     codeTtlSec: 30,
                     accessTokenTtlSec: 3600,
                     defaultScope: ['read', 'write'],
@@ -149,7 +156,7 @@ describe('CONFIG 環境変数の読み込み', () => {
         });
 
         describe('throw になる場合', () => {
-            it.each(['ISSUER', 'PORT', 'SIGNING_KEY_PATH'])(
+            it.each(['ISSUER', 'PORT', 'SIGNING_KEY_PATH', 'SESSION_SECRET'])(
                 '必須なのに、無い: %s',
                 (name) => {
                     const env = validEnv();
@@ -159,7 +166,7 @@ describe('CONFIG 環境変数の読み込み', () => {
                 },
             );
 
-            it.each(['ISSUER', 'PORT', 'SIGNING_KEY_PATH'])(
+            it.each(['ISSUER', 'PORT', 'SIGNING_KEY_PATH', 'SESSION_SECRET'])(
                 '必須なのに、空文字: %s',
                 (name) => {
                     expectInvalid({ ...validEnv(), [name]: '' }, name);
@@ -214,6 +221,69 @@ describe('CONFIG 環境変数の読み込み', () => {
             });
         });
 
+        describe('SESSION_SECRET', () => {
+            it.each([
+                { name: '31 文字(下限は 32)', value: 'k'.repeat(31) },
+                { name: '1 文字', value: 'k' },
+            ])('短すぎる: $name', ({ value }) => {
+                expectInvalid(
+                    { ...validEnv(), SESSION_SECRET: value },
+                    'SESSION_SECRET',
+                );
+            });
+
+            it('32 文字(下限)なら、通る', () => {
+                const config = loadConfig({
+                    ...validEnv(),
+                    SESSION_SECRET: 'k'.repeat(32),
+                });
+
+                expect(config.sessionSecret).toBe('k'.repeat(32));
+            });
+
+            it('エラーのメッセージに、秘密の値は入らない', () => {
+                const message = messageOf(() =>
+                    loadConfig({
+                        ...validEnv(),
+                        SESSION_SECRET: 'short-secret-value',
+                    }),
+                );
+
+                expect(message).toContain('SESSION_SECRET');
+                expect(message).not.toContain('short-secret-value');
+            });
+        });
+
+        describe('CODE_TTL_SEC の上限(RFC 6749 4.1.2: 最長 10 分が望ましい)', () => {
+            it('600 秒(10 分)なら、通る', () => {
+                const config = loadConfig({
+                    ...validEnv(),
+                    CODE_TTL_SEC: '600',
+                });
+
+                expect(config.codeTtlSec).toBe(600);
+            });
+
+            it('601 秒なら、エラー', () => {
+                expectInvalid(
+                    { ...validEnv(), CODE_TTL_SEC: '601' },
+                    'CODE_TTL_SEC',
+                );
+            });
+        });
+
+        describe('DEFAULT_SCOPE は、この AS が出せるスコープだけ', () => {
+            it.each([
+                { name: '未対応のスコープ', value: 'admin' },
+                { name: '一部が未対応', value: 'read admin' },
+            ])('エラー: $name', ({ value }) => {
+                expectInvalid(
+                    { ...validEnv(), DEFAULT_SCOPE: value },
+                    'DEFAULT_SCOPE',
+                );
+            });
+        });
+
         describe('エラーメッセージ', () => {
             it('悪い環境変数が複数あれば、全部の名前が入る', () => {
                 const message = messageOf(() =>
@@ -237,6 +307,7 @@ describe('CONFIG 環境変数の読み込み', () => {
                 for (const other of [
                     'ISSUER',
                     'SIGNING_KEY_PATH',
+                    'SESSION_SECRET',
                     'AUDIENCE',
                     'CODE_TTL_SEC',
                     'ACCESS_TOKEN_TTL_SEC',

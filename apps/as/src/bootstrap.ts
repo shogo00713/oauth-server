@@ -7,6 +7,8 @@ import { readFile } from 'node:fs/promises';
 import { createMemoryClientStore } from './stores/memory-client-store.js';
 import { createMemoryCodeStore } from './stores/memory-code-store.js';
 import { createApp } from './app.js';
+import { createMemoryUserStore } from './stores/memory-user-store.js';
+import { loadUsersFromEnv } from './users-from-env.js';
 
 export type BootstrapOptions = {
     // 鍵ファイルを読む関数。テストで差し替えられる
@@ -25,6 +27,7 @@ export async function bootstrap(
 ): Promise<BootstrapResult> {
     const config = loadConfig(env);
     const clients = loadClientsFromEnv(env);
+    const users = await loadUsersFromEnv(env);
     let pem: string;
     try {
         pem = await (
@@ -47,8 +50,15 @@ export async function bootstrap(
 
     const clientStore = createMemoryClientStore(clients);
     const codeStore = createMemoryCodeStore();
+    const userStore = createMemoryUserStore(users);
 
-    const app = createApp({ config, clientStore, codeStore, signingKey });
+    const app = createApp({
+        config,
+        clientStore,
+        codeStore,
+        userStore,
+        signingKey,
+    });
 
     return { app, config, codeStore };
 }
