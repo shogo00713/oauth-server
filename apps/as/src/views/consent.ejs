@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>アクセスの許可 | 認可サーバー</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+            background: #f4f5f7;
+            color: #222;
+        }
+        main {
+            max-width: 28rem;
+            margin: 4rem auto;
+            padding: 2rem;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 1.25rem;
+        }
+        p {
+            line-height: 1.7;
+        }
+        ul {
+            margin: 1rem 0;
+            padding: 0.75rem 1rem 0.75rem 2rem;
+            background: #f4f6fb;
+            border-radius: 8px;
+        }
+        li {
+            margin: 0.4rem 0;
+        }
+        code {
+            padding: 0.1rem 0.4rem;
+            font-size: 0.875rem;
+            background: #e3e8f5;
+            border-radius: 4px;
+        }
+        .note {
+            color: #666;
+            font-size: 0.875rem;
+        }
+        .buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        button {
+            flex: 1;
+            padding: 0.7rem;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button[value="allow"] {
+            color: #fff;
+            background: #2457d6;
+            border: 0;
+        }
+        button[value="deny"] {
+            color: #333;
+            background: #fff;
+            border: 1px solid #bbb;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>アクセスの許可</h1>
+        <p><strong><%= clientName %></strong> が、<strong><%= username %></strong> さんのアカウントで、次のことをしようとしています。</p>
+        <ul>
+            <% for (const scope of scopes) { %>
+            <li><code><%= scope.name %></code><% if (scope.description) { %> <%= scope.description %><% } %></li>
+            <% } %>
+        </ul>
+        <p class="note">許可しても、パスワードは、このアプリには渡りません。</p>
+        <form method="post" action="/consent">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="buttons">
+                <button type="submit" name="decision" value="deny">拒否する</button>
+                <button type="submit" name="decision" value="allow">許可する</button>
+            </div>
+        </form>
+    </main>
+</body>
+</html>
