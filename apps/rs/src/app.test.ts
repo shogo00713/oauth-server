@@ -23,6 +23,7 @@ const config: Config = {
     port: 4002,
     audience: TEST_AUDIENCE,
     verifyKeyPath: 'unused',
+    dbPath: 'unused',
     clockToleranceSec: 0,
 };
 

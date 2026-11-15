@@ -1,9 +1,9 @@
 import { bootstrap } from './bootstrap.js';
 
 try {
-    const { app, config } = await bootstrap(process.env);
+    const { app, config, close } = await bootstrap(process.env);
 
-    app.listen(config.port, (error) => {
+    const server = app.listen(config.port, (error) => {
         if (error) {
             console.error(`起動できませんでした: ${error.message}`);
             process.exit(1);
@@ -12,6 +12,15 @@ try {
             `シンプルメモアプリ(RS)を起動しました: port ${config.port}(issuer: ${config.issuer}、audience: ${config.audience})`,
         );
     });
+
+    // 止める時に、データベースを閉じる
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+        process.once(signal, () => {
+            server.close();
+            close();
+            process.exit(0);
+        });
+    }
 } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);

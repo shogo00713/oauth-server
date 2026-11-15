@@ -5,6 +5,7 @@ const validEnv = (): Record<string, string | undefined> => ({
     ISSUER: 'http://localhost:4000',
     PORT: '4002',
     VERIFY_KEY_PATH: '../../keys/as-public.pem',
+    DB_PATH: '../../data/rs.db',
 });
 
 const DEFAULT_CONFIG = {
@@ -12,6 +13,7 @@ const DEFAULT_CONFIG = {
     port: 4002,
     audience: 'simple-memo',
     verifyKeyPath: '../../keys/as-public.pem',
+    dbPath: '../../data/rs.db',
     clockToleranceSec: 0,
 };
 
@@ -36,7 +38,7 @@ const expectInvalid = (
 describe('CONFIG RS の環境変数の読み込み', () => {
     describe('loadConfig', () => {
         describe('読み込める例', () => {
-            it('必須の 3 つだけで、残りは既定値になる', () => {
+            it('必須の 4 つだけで、残りは既定値になる', () => {
                 expect(loadConfig(validEnv())).toEqual(DEFAULT_CONFIG);
             });
 
@@ -45,6 +47,7 @@ describe('CONFIG RS の環境変数の読み込み', () => {
                     ISSUER: 'https://as.example.com',
                     PORT: '8080',
                     VERIFY_KEY_PATH: '/etc/keys/public.pem',
+                    DB_PATH: '/var/lib/rs/memos.db',
                     AUDIENCE: 'my-api',
                     CLOCK_TOLERANCE_SEC: '30',
                 });
@@ -54,6 +57,7 @@ describe('CONFIG RS の環境変数の読み込み', () => {
                     port: 8080,
                     audience: 'my-api',
                     verifyKeyPath: '/etc/keys/public.pem',
+                    dbPath: '/var/lib/rs/memos.db',
                     clockToleranceSec: 30,
                 });
             });
@@ -95,6 +99,17 @@ describe('CONFIG RS の環境変数の読み込み', () => {
             });
 
             it.each([
+                { name: '相対の道', value: '../../data/rs.db' },
+                { name: '絶対の道', value: '/var/lib/rs/memos.db' },
+                { name: ':memory:(メモリの上だけ)', value: ':memory:' },
+                { name: '空白や日本語を含む', value: './my data/メモ.db' },
+            ])('DB_PATH に使える形: $name', ({ value }) => {
+                const config = loadConfig({ ...validEnv(), DB_PATH: value });
+
+                expect(config.dbPath).toBe(value);
+            });
+
+            it.each([
                 'http://localhost:4000',
                 'https://as.example.com',
                 'https://example.com/as',
@@ -133,7 +148,7 @@ describe('CONFIG RS の環境変数の読み込み', () => {
         });
 
         describe('throw になる場合', () => {
-            it.each(['ISSUER', 'PORT', 'VERIFY_KEY_PATH'])(
+            it.each(['ISSUER', 'PORT', 'VERIFY_KEY_PATH', 'DB_PATH'])(
                 '必須なのに、無い: %s',
                 (name) => {
                     const env = validEnv();
@@ -143,7 +158,7 @@ describe('CONFIG RS の環境変数の読み込み', () => {
                 },
             );
 
-            it.each(['ISSUER', 'PORT', 'VERIFY_KEY_PATH'])(
+            it.each(['ISSUER', 'PORT', 'VERIFY_KEY_PATH', 'DB_PATH'])(
                 '必須なのに、空文字: %s',
                 (name) => {
                     expectInvalid({ ...validEnv(), [name]: '' }, name);

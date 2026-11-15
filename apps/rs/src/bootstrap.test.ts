@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,7 @@ const env = (
     ISSUER: TEST_ISSUER,
     PORT: '4002',
     VERIFY_KEY_PATH: KEY_PATH,
+    DB_PATH: ':memory:',
     ...overrides,
 });
 
@@ -124,6 +125,7 @@ describe('BOOTSTRAP RS の起動の組み立て', () => {
                 expect(config.port).toBe(4321);
                 expect(config.issuer).toBe(TEST_ISSUER);
                 expect(config.verifyKeyPath).toBe(KEY_PATH);
+                expect(config.dbPath).toBe(':memory:');
             });
 
             it('公開鍵は、VERIFY_KEY_PATH の場所から、1 回だけ読む', async () => {
@@ -144,7 +146,7 @@ describe('BOOTSTRAP RS の起動の組み立て', () => {
                 ).resolves.toBeDefined();
             });
 
-            it('起動のたびに、メモの入れ物は、新しくなる(共有しない)', async () => {
+            it('DB_PATH が :memory: なら、起動のたびに、メモの入れ物は、新しくなる(共有しない)', async () => {
                 const first = await bootstrap(env(), {
                     readFile: async () => keys.publicPem,
                 });
@@ -194,6 +196,60 @@ describe('BOOTSTRAP RS の起動の組み立て', () => {
                     }),
                 ).rejects.toThrow(/VERIFY_KEY_PATH/);
                 expect(readFile).not.toHaveBeenCalled();
+            });
+
+            it('DB_PATH が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
+                const readFile = vi.fn(async () => keys.publicPem);
+
+                await expect(
+                    bootstrap(env({ DB_PATH: undefined }), { readFile }),
+                ).rejects.toThrow(/DB_PATH/);
+                expect(readFile).not.toHaveBeenCalled();
+            });
+
+            it('DB のファイルを開けなければ、場所がメッセージに入る。元の例外は、cause に残る', async () => {
+                // フォルダを指している
+                const promise = bootstrap(env({ DB_PATH: tempDir }), {
+                    readFile: async () => keys.publicPem,
+                });
+
+                await expect(promise).rejects.toThrow(tempDir);
+                await expect(promise).rejects.toMatchObject({
+                    cause: expect.any(Error),
+                });
+            });
+
+            it('環境変数が不正なら、DB のファイルは、作らない', async () => {
+                const dbPath = join(tempDir, 'not-created-1.db');
+
+                await expect(
+                    bootstrap(env({ ISSUER: 'not a url', DB_PATH: dbPath }), {
+                        readFile: async () => keys.publicPem,
+                    }),
+                ).rejects.toThrow(/ISSUER/);
+
+                expect(existsSync(dbPath)).toBe(false);
+            });
+
+            it('鍵が読めない、または不正なら、DB のファイルは、作らない', async () => {
+                const missing = join(tempDir, 'not-created-2.db');
+                const broken = join(tempDir, 'not-created-3.db');
+
+                await expect(
+                    bootstrap(env({ DB_PATH: missing }), {
+                        readFile: async () => {
+                            throw new Error('no such file');
+                        },
+                    }),
+                ).rejects.toThrow();
+                await expect(
+                    bootstrap(env({ DB_PATH: broken }), {
+                        readFile: async () => 'not a pem',
+                    }),
+                ).rejects.toThrow();
+
+                expect(existsSync(missing)).toBe(false);
+                expect(existsSync(broken)).toBe(false);
             });
 
             it('鍵のファイルが無ければ、場所と gen:key の案内がメッセージに入る。元の例外は、cause に残る', async () => {
@@ -251,6 +307,162 @@ describe('BOOTSTRAP RS の起動の組み立て', () => {
                 await expect(promise).rejects.toMatchObject({
                     cause: expect.any(RangeError),
                 });
+            });
+        });
+
+        describe('データベース(SQLite)', () => {
+            const readKey = async () => keys.publicPem;
+
+            // メモを 1 つ作る(持ち主は、トークンの sub)
+            const createMemo = async (
+                baseUrl: string,
+                body: string,
+                sub = 'alice',
+            ) => {
+                const response = await fetch(`${baseUrl}/memos`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${validToken(sub)}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ body }),
+                });
+                return (await response.json()) as { id: string; body: string };
+            };
+
+            const listMemos = async (baseUrl: string, sub = 'alice') => {
+                const response = await fetch(`${baseUrl}/memos`, {
+                    headers: { Authorization: `Bearer ${validToken(sub)}` },
+                });
+                return (
+                    (await response.json()) as {
+                        memos: { id: string; body: string }[];
+                    }
+                ).memos;
+            };
+
+            it('止めて、もう一度起動しても、メモが残る(同じ id、同じ持ち主)', async () => {
+                const dbPath = join(tempDir, 'restart.db');
+                const first = await bootstrap(env({ DB_PATH: dbPath }), {
+                    readFile: readKey,
+                });
+                const serverA = await startServer(first.app);
+                const created = await createMemo(serverA.baseUrl, '牛乳を買う');
+                await serverA.close();
+                first.close();
+
+                const second = await bootstrap(env({ DB_PATH: dbPath }), {
+                    readFile: readKey,
+                });
+                const serverB = await startServer(second.app);
+
+                try {
+                    expect(await listMemos(serverB.baseUrl)).toEqual([
+                        expect.objectContaining({
+                            id: created.id,
+                            body: '牛乳を買う',
+                        }),
+                    ]);
+                    // 持ち主が違う人には、見えない
+                    expect(await listMemos(serverB.baseUrl, 'bob')).toEqual([]);
+                } finally {
+                    await serverB.close();
+                    second.close();
+                }
+            });
+
+            it('止めて、もう一度起動したあとの、更新と削除も、残る', async () => {
+                const dbPath = join(tempDir, 'restart-update.db');
+                const first = await bootstrap(env({ DB_PATH: dbPath }), {
+                    readFile: readKey,
+                });
+                const serverA = await startServer(first.app);
+                const keep = await createMemo(serverA.baseUrl, 'keep');
+                const drop = await createMemo(serverA.baseUrl, 'drop');
+                await fetch(`${serverA.baseUrl}/memos/${keep.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${validToken()}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ body: 'kept and changed' }),
+                });
+                await fetch(`${serverA.baseUrl}/memos/${drop.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${validToken()}` },
+                });
+                await serverA.close();
+                first.close();
+
+                const second = await bootstrap(env({ DB_PATH: dbPath }), {
+                    readFile: readKey,
+                });
+                const serverB = await startServer(second.app);
+
+                try {
+                    expect(
+                        (await listMemos(serverB.baseUrl)).map((m) => m.body),
+                    ).toEqual(['kept and changed']);
+                } finally {
+                    await serverB.close();
+                    second.close();
+                }
+            });
+
+            it('DB のファイルが、まだ無ければ、作る(置き場のフォルダが無くても)', async () => {
+                const dbPath = join(tempDir, 'new-folder', 'deep', 'rs.db');
+
+                const { close } = await bootstrap(env({ DB_PATH: dbPath }), {
+                    readFile: readKey,
+                });
+
+                expect(existsSync(dbPath)).toBe(true);
+                close();
+            });
+
+            it('DB_PATH が :memory: なら、ファイルを作らない', async () => {
+                const { close } = await bootstrap(env(), {
+                    readFile: readKey,
+                });
+
+                expect(existsSync(':memory:')).toBe(false);
+                close();
+            });
+
+            it('close すると、データベースが閉じる(あとのリクエストは、500 のエラーになる。落ちない)', async () => {
+                const { app, close } = await bootstrap(env(), {
+                    readFile: readKey,
+                });
+                const server = await startServer(app);
+                const consoleError = vi
+                    .spyOn(console, 'error')
+                    .mockImplementation(() => {});
+
+                try {
+                    close();
+                    const response = await fetch(`${server.baseUrl}/memos`, {
+                        headers: { Authorization: `Bearer ${validToken()}` },
+                    });
+
+                    expect(response.status).toBe(500);
+                    // 比べるために、トークンが無い時は、DB を使わないので、これまで通り 401
+                    expect(
+                        (await fetch(`${server.baseUrl}/memos`)).status,
+                    ).toBe(401);
+                } finally {
+                    consoleError.mockRestore();
+                    await server.close();
+                }
+            });
+
+            it('close は、2 回呼んでも、エラーにならない', async () => {
+                const { close } = await bootstrap(env(), {
+                    readFile: readKey,
+                });
+
+                close();
+
+                expect(() => close()).not.toThrow();
             });
         });
     });

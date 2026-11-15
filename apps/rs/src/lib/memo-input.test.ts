@@ -74,6 +74,39 @@ describe('MEMO-INPUT メモの入力検証(zod)', () => {
             });
         });
 
+        describe('壊れた UTF-16(孤立したサロゲート)は、断る(SQLite に、そのままでは入れられない)', () => {
+            // 高い方だけ、低い方だけ(コードの中に、直接書かずに、番号で作る)
+            const HIGH = String.fromCharCode(0xd83d);
+            const LOW = String.fromCharCode(0xde00);
+
+            it.each([
+                { name: '高い方だけ(前に文字がある)', body: `a${HIGH}b` },
+                { name: '低い方だけ', body: `a${LOW}b` },
+                { name: '末尾が、高い方だけ', body: `abc${HIGH}` },
+                { name: '先頭が、低い方だけ', body: `${LOW}abc` },
+                {
+                    name: '低い方、高い方の順(組になっていない)',
+                    body: `${LOW}${HIGH}`,
+                },
+                { name: '1 文字だけ', body: HIGH },
+            ])('$name', ({ body }) => {
+                expect(parseMemoInput({ body })).toBeNull();
+            });
+
+            it('高い方と低い方が、組になっている(絵文字)なら、良い', () => {
+                const body = `a${HIGH}${LOW}b`;
+
+                expect(body).toBe('a😀b');
+                expect(parseMemoInput({ body })).toEqual({ body });
+            });
+
+            it('NUL(U+0000)は、壊れた文字ではないので、良い', () => {
+                const body = `a${String.fromCharCode(0)}b`;
+
+                expect(parseMemoInput({ body })).toEqual({ body });
+            });
+        });
+
         describe('知らない項目は、捨てる(持ち主や id を、クライアントに決めさせない)', () => {
             it('owner、id、日時が付いていても、body だけが残る', () => {
                 const result = parseMemoInput({

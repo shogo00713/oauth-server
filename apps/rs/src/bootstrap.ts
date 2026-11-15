@@ -3,7 +3,7 @@ import type { Express } from 'express';
 import { createApp } from './app.js';
 import { loadConfig, type Config } from './lib/config.js';
 import { importVerifyKey } from './lib/verify-key.js';
-import { createMemoryMemoStore } from './stores/memory-memo-store.js';
+import { createSqliteMemoStore } from './stores/sqlite-memo-store.js';
 
 export type BootstrapOptions = {
     // 公開鍵のファイルを読む関数。テストで差し替えられる
@@ -13,6 +13,8 @@ export type BootstrapOptions = {
 export type BootstrapResult = {
     app: Express;
     config: Config;
+    // データベースを閉じる(止める時に呼ぶ。2 回呼んでも、良い)
+    close: () => void;
 };
 
 export async function bootstrap(
@@ -43,8 +45,9 @@ export async function bootstrap(
         );
     }
 
-    const memoStore = createMemoryMemoStore();
+    // データベースは、最後に開く(設定や鍵が不正な時に、ファイルを作らないため)
+    const memoStore = createSqliteMemoStore({ path: config.dbPath });
     const app = createApp({ config, memoStore, verifyKey });
 
-    return { app, config };
+    return { app, config, close: () => memoStore.close() };
 }

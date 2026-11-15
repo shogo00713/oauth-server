@@ -14,6 +14,8 @@ export type Config = {
     verifyKeyPath: string;
     // 時計のずれを許す秒数
     clockToleranceSec: number;
+    // メモを入れる SQLite のファイルの場所(':memory:' なら、メモリの上だけ)
+    dbPath: string;
 };
 
 const emptyAsUnset = (value: unknown) => (value === '' ? undefined : value);
@@ -46,6 +48,7 @@ const schema = z.object({
         emptyAsUnset,
         z.coerce.number().int().min(0).max(300).default(0),
     ),
+    DB_PATH: z.preprocess(emptyAsUnset, z.string()),
 });
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -62,5 +65,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
         audience: values.AUDIENCE,
         verifyKeyPath: values.VERIFY_KEY_PATH,
         clockToleranceSec: values.CLOCK_TOLERANCE_SEC,
+        dbPath: values.DB_PATH,
     };
 }

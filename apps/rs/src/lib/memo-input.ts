@@ -13,7 +13,11 @@ export type MemoInput = {
 };
 
 const schema = z.object({
-    body: z.string().min(1).max(MAX_BODY_LENGTH),
+    body: z
+        .string()
+        .min(1)
+        .max(MAX_BODY_LENGTH)
+        .refine((body) => body.isWellFormed()),
 });
 
 /**
