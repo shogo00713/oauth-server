@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>メモ一覧 | メモボード</title>
+    <%- include('partials/style') %>
+</head>
+<body>
+    <main>
+        <%- include('partials/header', { csrfToken }) %>
+        <h1>メモ一覧</h1>
+        <% if (locals.flash) { %>
+        <p class="flash" role="status"><%= flash %></p>
+        <% } %>
+
+        <form class="search" method="get" action="/" role="search">
+            <input type="search" name="q" value="<%= query %>" maxlength="200" placeholder="キーワードで探す" aria-label="キーワード">
+            <button type="submit">検索</button>
+        </form>
+
+        <form class="create" method="post" action="/">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <label>新しいメモ
+                <textarea name="body" rows="3" maxlength="10000" required></textarea>
+            </label>
+            <button type="submit">追加</button>
+        </form>
+
+        <% if (query !== '') { %>
+        <p id="result-count"><%= memos.length %> 件</p>
+        <% } %>
+        <% if (memos.length === 0) { %>
+            <% if (query === '') { %>
+        <p id="empty">まだメモがありません。</p>
+            <% } else { %>
+        <p id="no-match">「<%= query %>」に合うメモはありません。<a href="/">検索をやめる</a></p>
+            <% } %>
+        <% } else { %>
+        <ul id="memos">
+            <% for (const memo of memos) { %>
+            <li>
+                <a class="memo-body" href="/detail/<%= encodeURIComponent(memo.id) %>"><%= memo.body %></a>
+                <time datetime="<%= memo.updatedAt %>"><%= memo.updatedAt %></time>
+            </li>
+            <% } %>
+        </ul>
+        <% } %>
+    </main>
+</body>
+</html>

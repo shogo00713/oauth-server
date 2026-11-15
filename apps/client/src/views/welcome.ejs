@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>メモボード</title>
+    <%- include('partials/style') %>
+</head>
+<body>
+    <main>
+        <h1>メモボード</h1>
+        <% if (locals.flash) { %>
+        <p class="flash" role="status"><%= flash %></p>
+        <% } %>
+        <p>シンプルメモアプリのメモを、ここから見たり、書いたりできます。</p>
+        <p>使うには、認可サーバーでログインして、このアプリに許可を出してください。</p>
+        <p><a class="button" href="/login">ログインして始める</a></p>
+    </main>
+</body>
+</html>

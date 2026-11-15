@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>メモ | メモボード</title>
+    <%- include('partials/style') %>
+</head>
+<body>
+    <main>
+        <%- include('partials/header', { csrfToken }) %>
+        <p><a href="/">← メモ一覧へ</a></p>
+        <h1>メモ</h1>
+        <% if (locals.flash) { %>
+        <p class="flash" role="status"><%= flash %></p>
+        <% } %>
+
+        <dl class="times">
+            <dt>作成</dt>
+            <dd><time datetime="<%= memo.createdAt %>"><%= memo.createdAt %></time></dd>
+            <dt>更新</dt>
+            <dd><time datetime="<%= memo.updatedAt %>"><%= memo.updatedAt %></time></dd>
+        </dl>
+
+        <form class="update" method="post" action="/detail/<%= encodeURIComponent(memo.id) %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="action" value="update">
+            <label>本文
+                <%# textarea の最初の改行は、ブラウザが 1 つ捨てる。本文が改行で始まっていても、消えないように、1 つ足しておく %>
+                <textarea name="body" rows="10" maxlength="10000" required>
+<%= memo.body %></textarea>
+            </label>
+            <button type="submit">保存</button>
+        </form>
+
+        <details class="danger">
+            <summary>削除する</summary>
+            <p>このメモを削除します。元には戻せません。</p>
+            <form class="delete" method="post" action="/detail/<%= encodeURIComponent(memo.id) %>">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="danger">このメモを削除する</button>
+            </form>
+        </details>
+    </main>
+</body>
+</html>

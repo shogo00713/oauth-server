@@ -1,0 +1,148 @@
+<style>
+    body {
+        margin: 0;
+        font-family:
+            system-ui,
+            -apple-system,
+            'Hiragino Sans',
+            sans-serif;
+        background: #f4f5f7;
+        color: #222;
+    }
+    main {
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 1.5rem 2rem 2rem;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+    h1 {
+        margin: 1rem 0 0.75rem;
+        font-size: 1.25rem;
+    }
+    p {
+        line-height: 1.7;
+    }
+    a {
+        color: #2457d6;
+    }
+    .app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid #e3e5e8;
+    }
+    .app-header .brand {
+        font-weight: bold;
+        color: #222;
+        text-decoration: none;
+    }
+    .app-header form {
+        margin: 0;
+    }
+    label {
+        display: block;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+        color: #444;
+    }
+    input[type='search'],
+    textarea {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 0.25rem;
+        padding: 0.6rem 0.75rem;
+        font: inherit;
+        border: 1px solid #bbb;
+        border-radius: 8px;
+    }
+    textarea {
+        resize: vertical;
+    }
+    button,
+    .button {
+        display: inline-block;
+        margin-top: 0.75rem;
+        padding: 0.55rem 1.1rem;
+        font: inherit;
+        color: #fff;
+        text-decoration: none;
+        background: #2457d6;
+        border: 0;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+    button.secondary {
+        margin-top: 0;
+        padding: 0.35rem 0.8rem;
+        font-size: 0.875rem;
+        color: #444;
+        background: #eceef1;
+    }
+    button.danger {
+        background: #c0392b;
+    }
+    .search {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    .search input {
+        margin-top: 0;
+    }
+    .search button {
+        margin-top: 0;
+        white-space: nowrap;
+    }
+    .flash {
+        padding: 0.6rem 0.75rem;
+        color: #1b5e20;
+        background: #e8f5e9;
+        border-radius: 8px;
+    }
+    .hint,
+    time,
+    dt {
+        color: #666;
+        font-size: 0.875rem;
+    }
+    ul#memos {
+        padding: 0;
+        margin: 1rem 0 0;
+        list-style: none;
+    }
+    ul#memos li {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e3e5e8;
+    }
+    .memo-body {
+        display: -webkit-box;
+        line-clamp: 2;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        white-space: pre-line;
+    }
+    dl.times {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+        margin: 0;
+    }
+    dl.times dd {
+        margin: 0;
+    }
+    details.danger {
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e3e5e8;
+    }
+    details.danger summary {
+        color: #c0392b;
+        cursor: pointer;
+    }
+</style>
