@@ -1,5 +1,7 @@
 # OAuth サーバー
 
+[![CI](https://github.com/shogo00713/oauth-server/actions/workflows/ci.yaml/badge.svg)](https://github.com/shogo00713/oauth-server/actions/workflows/ci.yaml)
+
 - OAuth2.0 のフローを体感する学習用に作成した Web アプリケーションです
 - OAuth2.0 の認可コードグラントを実行するために、「認可サーバー」「リソースサーバー」「クライアント」の 3 役があります
 - state, PKCE, JWT 形式のアクセストークン などを導入しています
