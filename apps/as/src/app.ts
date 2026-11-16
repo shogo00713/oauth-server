@@ -1,4 +1,13 @@
+/**
+ * OAuth 2.0 認可サーバーの Express アプリを作成するプログラム
+ *
+ * index.ts で作成したプロセス上に
+ * bootstrap() で読み込んだ環境変数や鍵を使用して
+ * createApp() でアプリを作成する
+ */
+
 import express, { type Express } from 'express';
+
 import type { Config } from './lib/config.js';
 import { notFoundHandler, pageErrorHandler } from './lib/page-errors.js';
 import { SUPPORTED_SCOPES } from './lib/scope.js';
@@ -6,10 +15,12 @@ import { securityHeaders } from './lib/security-headers.js';
 import { createSessionMiddleware } from './lib/session.js';
 import type { SigningKey } from './lib/signing-key.js';
 import { configureViews } from './lib/views.js';
+
 import { createAuthorizeRouter } from './routes/authorize.js';
 import { createConsentRouter } from './routes/consent.js';
 import { createLoginRouter } from './routes/login.js';
 import { createTokenRouter } from './routes/token.js';
+
 import type { ClientStore } from './stores/client-store.js';
 import type { CodeStore } from './stores/code-store.js';
 import type { UserStore } from './stores/user-store.js';
@@ -23,17 +34,26 @@ export type AppDeps = {
     now?: (() => number) | undefined; // テスト用の今の時刻を返す関数
 };
 
+/**
+ * 実際に Express アプリを作る関数
+ *
+ * Express インスタンスの作成 -> ミドルウェアの設定 -> ルーターの登録 -> エラーハンドリング の順
+ *
+ * @param deps 必要な依存関係, bootstrap で読み込んだものが渡される
+ * @returns Express アプリ
+ */
 export function createApp(deps: AppDeps): Express {
     const { config, clientStore, codeStore, userStore } = deps;
     const app = express();
 
+    // 共通のミドルウェアの設定
     configureViews(app);
     app.use(securityHeaders());
 
-    // トークンエンドポイントは、アプリのサーバーが呼ぶ物。セッション(Cookie)は、使わない
+    // トークンエンドポイントのルーターを登録（セッションを使わないので先に）
     app.use('/token', createTokenRouter(deps));
 
-    // ここから下は、ブラウザの画面(セッションを使う)
+    // セッションの設定
     app.use(
         createSessionMiddleware({
             secret: config.sessionSecret,
@@ -41,6 +61,8 @@ export function createApp(deps: AppDeps): Express {
             secure: new URL(config.issuer).protocol === 'https:',
         }),
     );
+
+    // 各ルーターの登録
     app.use(
         '/authorize',
         createAuthorizeRouter({
@@ -61,7 +83,9 @@ export function createApp(deps: AppDeps): Express {
         }),
     );
 
+    // エラーハンドリング
     app.use(notFoundHandler);
     app.use(pageErrorHandler);
+
     return app;
 }

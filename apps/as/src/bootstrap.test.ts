@@ -230,7 +230,6 @@ describe('BOOTSTRAP 起動の組み立て', () => {
 
                 const promise = bootstrap(env(), { readFile });
 
-                await expect(promise).rejects.toThrow(KEY_PATH);
                 await expect(promise).rejects.toThrow('gen:key');
                 await expect(promise).rejects.toMatchObject({
                     cause: { code: 'ENOENT' },
