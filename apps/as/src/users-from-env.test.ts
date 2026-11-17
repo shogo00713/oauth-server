@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { sha256Hex } from './lib/hash.js';
 import { verifyPassword } from './lib/password.js';
 import { loadUsersFromEnv } from './users-from-env.js';
 
+// 既定値は無いので、昔の既定値(demo)とは違う名前を使う
+const USER_NAME = 'alice';
 // ちょうど 12 文字(下限)
 const PASSWORD = 'a1b2c3d4e5f6';
 
+// 2 つとも必須(既定値は無い)
+const REQUIRED = ['USER_NAME', 'USER_PASSWORD'] as const;
+
 const validEnv = (): Record<string, string | undefined> => ({
+    USER_NAME,
     USER_PASSWORD: PASSWORD,
 });
 
@@ -31,20 +38,20 @@ const expectInvalid = async (
 describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
     describe('loadUsersFromEnv', () => {
         describe('読み込める例', () => {
-            it('パスワードだけで、名前は demo になる(ユーザーは 1 人)', async () => {
+            it('名前とパスワードで、ユーザーが 1 人できる(名前は、指定した物)', async () => {
                 const users = await loadUsersFromEnv(validEnv());
 
                 expect(users).toHaveLength(1);
-                expect(users[0]?.username).toBe('demo');
+                expect(users[0]?.username).toBe(USER_NAME);
             });
 
-            it('名前も指定すれば、その名前になる', async () => {
+            it('別の名前を指定すれば、別の名前になる', async () => {
                 const users = await loadUsersFromEnv({
                     ...validEnv(),
-                    USER_NAME: 'alice.v2',
+                    USER_NAME: 'bob.v2',
                 });
 
-                expect(users[0]?.username).toBe('alice.v2');
+                expect(users[0]?.username).toBe('bob.v2');
             });
 
             it('持っている項目は、id、username、passwordHash だけ(平文のパスワードの項目は無い)', async () => {
@@ -77,6 +84,7 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
 
             it('パスワードの前後の空白も、そのまま使われる(取り除かない)', async () => {
                 const [user] = await loadUsersFromEnv({
+                    ...validEnv(),
                     USER_PASSWORD: '  pass word 12  ',
                 });
 
@@ -95,6 +103,7 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
                 const password = 'あ'.repeat(12);
 
                 const [user] = await loadUsersFromEnv({
+                    ...validEnv(),
                     USER_PASSWORD: password,
                 });
 
@@ -112,15 +121,6 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
                 });
 
                 expect(users).toHaveLength(1);
-            });
-
-            it('USER_NAME が空文字なら、未設定として扱う(demo になる)', async () => {
-                const users = await loadUsersFromEnv({
-                    ...validEnv(),
-                    USER_NAME: '',
-                });
-
-                expect(users[0]?.username).toBe('demo');
             });
 
             it('呼ぶたびに、ハッシュは違う(salt が違う)けど、どれも確かめられる', async () => {
@@ -144,6 +144,14 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
                 expect(user?.id).toMatch(/^[0-9a-f]{32}$/);
             });
 
+            it('sha256("user" + USER_NAME) の先頭 32 文字(メモの持ち主 = sub なので、勝手に変えない)', async () => {
+                const [user] = await loadUsersFromEnv(validEnv());
+
+                expect(user?.id).toBe(
+                    sha256Hex(`user${USER_NAME}`).slice(0, 32),
+                );
+            });
+
             it('呼ぶたびに、同じ(起動のたびに、変わらない)', async () => {
                 const [first] = await loadUsersFromEnv(validEnv());
                 const [second] = await loadUsersFromEnv(validEnv());
@@ -154,6 +162,7 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
             it('パスワードが変わっても、同じ', async () => {
                 const [first] = await loadUsersFromEnv(validEnv());
                 const [second] = await loadUsersFromEnv({
+                    ...validEnv(),
                     USER_PASSWORD: 'z9y8x7w6v5u4',
                 });
 
@@ -185,17 +194,22 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
 
                 expect(lower?.id).not.toBe(upper?.id);
             });
+        });
 
-            it('USER_NAME を省略した時の ID は、USER_NAME=demo と同じ(省略した時の名前が demo なので)', async () => {
-                const [omitted] = await loadUsersFromEnv(validEnv());
-                const [explicit] = await loadUsersFromEnv({
-                    ...validEnv(),
-                    USER_NAME: 'demo',
-                });
+        describe('必須(既定値は無い)', () => {
+            it.each(REQUIRED)('無い: %s', async (name) => {
+                const env = validEnv();
+                delete env[name];
 
-                expect(omitted?.username).toBe('demo');
-                expect(omitted?.id).toBe(explicit?.id);
+                await expectInvalid(env, name);
             });
+
+            it.each(REQUIRED)(
+                '空文字(未設定として扱うので、無いのと同じ): %s',
+                async (name) => {
+                    await expectInvalid({ ...validEnv(), [name]: '' }, name);
+                },
+            );
         });
 
         describe('USER_NAME が不正', () => {
@@ -235,23 +249,16 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
         });
 
         describe('USER_PASSWORD が不正', () => {
-            it('無い', async () => {
-                await expectInvalid({}, 'USER_PASSWORD');
-            });
-
-            it('空文字(未設定として扱うので、無いのと同じ)', async () => {
-                await expectInvalid({ USER_PASSWORD: '' }, 'USER_PASSWORD');
-            });
-
             it('11 文字(下限は 12)', async () => {
                 await expectInvalid(
-                    { USER_PASSWORD: 'a'.repeat(11) },
+                    { ...validEnv(), USER_PASSWORD: 'a'.repeat(11) },
                     'USER_PASSWORD',
                 );
             });
 
             it('12 文字(下限)なら、通る', async () => {
                 const users = await loadUsersFromEnv({
+                    ...validEnv(),
                     USER_PASSWORD: 'a'.repeat(12),
                 });
 
@@ -260,6 +267,13 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
         });
 
         describe('エラーのメッセージ', () => {
+            it('何も無ければ、両方の名前が入る', async () => {
+                const message = await rejectionMessage(loadUsersFromEnv({}));
+
+                expect(message).toContain('USER_NAME');
+                expect(message).toContain('USER_PASSWORD');
+            });
+
             it('両方が不正なら、両方の名前が入る', async () => {
                 const message = await rejectionMessage(
                     loadUsersFromEnv({ USER_NAME: 'a b', USER_PASSWORD: 'x' }),
@@ -269,9 +283,32 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
                 expect(message).toContain('USER_PASSWORD');
             });
 
+            it('悪くない方の名前は、入らない', async () => {
+                const badPassword = await rejectionMessage(
+                    loadUsersFromEnv({ ...validEnv(), USER_PASSWORD: 'x' }),
+                );
+                const badName = await rejectionMessage(
+                    loadUsersFromEnv({ ...validEnv(), USER_NAME: 'a b' }),
+                );
+
+                expect(badPassword).toContain('USER_PASSWORD');
+                expect(badPassword).not.toContain('USER_NAME');
+                expect(badName).toContain('USER_NAME');
+                expect(badName).not.toContain('USER_PASSWORD');
+            });
+
+            it('「環境変数が不正です」と、書いてある', async () => {
+                const message = await rejectionMessage(loadUsersFromEnv({}));
+
+                expect(message).toContain('環境変数が不正です');
+            });
+
             it('短すぎるパスワードの値は、メッセージに入らない', async () => {
                 const message = await rejectionMessage(
-                    loadUsersFromEnv({ USER_PASSWORD: 'secret-pw-1' }),
+                    loadUsersFromEnv({
+                        ...validEnv(),
+                        USER_PASSWORD: 'secret-pw-1',
+                    }),
                 );
 
                 // 何が悪いかは、書いてある(名前は入る)けど、値は入らない
@@ -282,8 +319,8 @@ describe('USERS FROM ENV 登録済みユーザーの読み込み', () => {
             it('名前が不正でも、(正しい)パスワードの値は、メッセージに入らない', async () => {
                 const message = await rejectionMessage(
                     loadUsersFromEnv({
+                        ...validEnv(),
                         USER_NAME: 'a b',
-                        USER_PASSWORD: PASSWORD,
                     }),
                 );
 

@@ -14,8 +14,12 @@ import { createClient, startServer } from './test-utils/http.js';
 import { authorizeInBrowser, exchangeCode } from './test-utils/oauth-flow.js';
 import { loadUsersFromEnv } from './users-from-env.js';
 
+// クライアントとユーザーは、既定値が無い。昔の既定値(memoboard、メモボード、demo)とは違う値を使う
+const CLIENT_ID = 'test-client';
+const CLIENT_NAME = 'テストクライアント';
 const SECRET = 'a'.repeat(40);
 const SESSION_SECRET = 'b'.repeat(40);
+const USER_NAME = 'alice';
 const USER_PASSWORD = 'a1b2c3d4e5f6';
 const KEY_PATH = '../../keys/as-private.pem';
 const REDIRECT_URI = 'http://localhost:3000/callback';
@@ -24,18 +28,57 @@ const CODE = 'authorization-code-for-test';
 const CODE_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const CODE_CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
 
+// 起動に必要な環境変数(どれも、既定値は無い)
+const REQUIRED = [
+    'ISSUER',
+    'PORT',
+    'SIGNING_KEY_PATH',
+    'SESSION_SECRET',
+    'CLIENT_ID',
+    'CLIENT_NAME',
+    'CLIENT_SECRET',
+    'CLIENT_REDIRECT_URIS',
+    'USER_NAME',
+    'USER_PASSWORD',
+] as const;
+
 const env = (
     overrides: Record<string, string | undefined> = {},
 ): Record<string, string | undefined> => ({
     ISSUER: 'http://localhost:4000',
     PORT: '4000',
     SIGNING_KEY_PATH: KEY_PATH,
+    SESSION_SECRET,
+    CLIENT_ID,
+    CLIENT_NAME,
     CLIENT_SECRET: SECRET,
     CLIENT_REDIRECT_URIS: REDIRECT_URI,
-    SESSION_SECRET,
+    USER_NAME,
     USER_PASSWORD,
     ...overrides,
 });
+
+// 画面の HTML から、フォームの CSRF トークンを取り出す
+const csrfOf = (html: string): string =>
+    /<input[^>]*name="_csrf"[^>]*value="([^"]*)"/.exec(html)?.[1] ?? '';
+
+// /authorize にアクセスして、ログイン画面を開く(ブラウザの代わり)
+const openLoginPage = async (
+    browser: ReturnType<typeof createClient>,
+    clientId: string,
+) => {
+    const query = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: REDIRECT_URI,
+        code_challenge: CODE_CHALLENGE,
+        code_challenge_method: 'S256',
+    });
+    const authorize = await browser.get(`/authorize?${query.toString()}`);
+    expect(authorize.status).toBe(303);
+    expect(authorize.location).toBe('/login');
+    return browser.get('/login');
+};
 
 let pem: string;
 let tempDir: string;
@@ -61,7 +104,7 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                     readFile: async () => pem,
                 });
                 await codeStore.save(sha256Hex(CODE), {
-                    clientId: 'memoboard',
+                    clientId: CLIENT_ID,
                     redirectUri: REDIRECT_URI,
                     codeChallenge: CODE_CHALLENGE,
                     sub: 'user-1',
@@ -78,7 +121,7 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                     const res = await fetch(`http://127.0.0.1:${port}/token`, {
                         method: 'POST',
                         headers: {
-                            Authorization: `Basic ${Buffer.from(`memoboard:${SECRET}`).toString('base64')}`,
+                            Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${SECRET}`).toString('base64')}`,
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
                         body: new URLSearchParams({
@@ -101,7 +144,7 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                             typ: 'at+jwt',
                         },
                     );
-                    expect(payload['client_id']).toBe('memoboard');
+                    expect(payload['client_id']).toBe(CLIENT_ID);
                     expect(protectedHeader.kid).toBe(kid);
                 } finally {
                     server.closeAllConnections();
@@ -121,17 +164,17 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                     const callback = await authorizeInBrowser(
                         browser,
                         {
-                            clientId: 'memoboard',
+                            clientId: CLIENT_ID,
                             redirectUri: REDIRECT_URI,
                             codeChallenge: computeCodeChallenge(verifier),
                             state: 'xyz',
                         },
-                        { username: 'demo', password: USER_PASSWORD },
+                        { username: USER_NAME, password: USER_PASSWORD },
                     );
                     expect(callback.searchParams.get('state')).toBe('xyz');
 
                     const token = await exchangeCode(server.baseUrl, {
-                        clientId: 'memoboard',
+                        clientId: CLIENT_ID,
                         clientSecret: SECRET,
                         code: callback.searchParams.get('code') ?? '',
                         redirectUri: REDIRECT_URI,
@@ -151,6 +194,74 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                     const [user] = await loadUsersFromEnv(env());
                     expect(payload.sub).toBe(user?.id);
                     expect(payload['scope']).toBe('read');
+                } finally {
+                    await server.close();
+                }
+            });
+
+            it('ログイン画面に、CLIENT_NAME の名前が出る(クライアントの名前は、環境変数の物)', async () => {
+                const { app } = await bootstrap(env(), {
+                    readFile: async () => pem,
+                });
+                const server = await startServer(app);
+
+                try {
+                    const page = await openLoginPage(
+                        createClient(server.baseUrl),
+                        CLIENT_ID,
+                    );
+
+                    expect(page.status).toBe(200);
+                    expect(page.text).toContain(CLIENT_NAME);
+                } finally {
+                    await server.close();
+                }
+            });
+
+            it('昔の既定値のクライアント(memoboard)は、居ない(環境変数に書いた物だけ)', async () => {
+                const { app } = await bootstrap(env(), {
+                    readFile: async () => pem,
+                });
+                const server = await startServer(app);
+
+                try {
+                    const token = await exchangeCode(server.baseUrl, {
+                        clientId: 'memoboard',
+                        clientSecret: SECRET,
+                        code: 'any-code',
+                        redirectUri: REDIRECT_URI,
+                        codeVerifier: CODE_VERIFIER,
+                    });
+
+                    expect(token.status).toBe(401);
+                    expect(token.json['error']).toBe('invalid_client');
+                } finally {
+                    await server.close();
+                }
+            });
+
+            it('昔の既定値のユーザー(demo)は、居ない(パスワードが合っていても、ログインできない)', async () => {
+                const { app } = await bootstrap(env(), {
+                    readFile: async () => pem,
+                });
+                const server = await startServer(app);
+                const browser = createClient(server.baseUrl);
+
+                try {
+                    const page = await openLoginPage(browser, CLIENT_ID);
+
+                    const response = await browser.postForm('/login', {
+                        username: 'demo',
+                        password: USER_PASSWORD,
+                        _csrf: csrfOf(page.text),
+                    });
+
+                    // 成功なら /consent への 303。失敗なら、ログイン画面のまま
+                    expect(response.status).toBe(200);
+                    expect(response.location).toBeNull();
+                    expect(response.text).toContain(
+                        'ユーザー名かパスワードが違います',
+                    );
                 } finally {
                     await server.close();
                 }
@@ -185,6 +296,21 @@ describe('BOOTSTRAP 起動の組み立て', () => {
         });
 
         describe('起動できない例(reject)', () => {
+            it.each(REQUIRED)(
+                '必須の環境変数(既定値は無い)が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない: %s',
+                async (name) => {
+                    const readFile = vi.fn(async () => pem);
+                    // 本物の環境変数のように、キーごと無くす(undefined を入れるのとは、違う)
+                    const missing = env();
+                    delete missing[name];
+
+                    await expect(
+                        bootstrap(missing, { readFile }),
+                    ).rejects.toThrow(name);
+                    expect(readFile).not.toHaveBeenCalled();
+                },
+            );
+
             it('環境変数が不正なら、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
                 const readFile = vi.fn(async () => pem);
 
@@ -198,26 +324,17 @@ describe('BOOTSTRAP 起動の組み立て', () => {
                 const readFile = vi.fn(async () => pem);
 
                 await expect(
-                    bootstrap(env({ CLIENT_SECRET: undefined }), { readFile }),
-                ).rejects.toThrow(/CLIENT_SECRET/);
+                    bootstrap(env({ CLIENT_ID: 'my app' }), { readFile }),
+                ).rejects.toThrow(/CLIENT_ID/);
                 expect(readFile).not.toHaveBeenCalled();
             });
 
-            it('SESSION_SECRET が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
+            it('ユーザーの設定が不正なら、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
                 const readFile = vi.fn(async () => pem);
 
                 await expect(
-                    bootstrap(env({ SESSION_SECRET: undefined }), { readFile }),
-                ).rejects.toThrow(/SESSION_SECRET/);
-                expect(readFile).not.toHaveBeenCalled();
-            });
-
-            it('ユーザーの設定(USER_PASSWORD)が無ければ、名前がメッセージに入る。鍵のファイルは、読みにいかない', async () => {
-                const readFile = vi.fn(async () => pem);
-
-                await expect(
-                    bootstrap(env({ USER_PASSWORD: undefined }), { readFile }),
-                ).rejects.toThrow(/USER_PASSWORD/);
+                    bootstrap(env({ USER_NAME: 'a b' }), { readFile }),
+                ).rejects.toThrow(/USER_NAME/);
                 expect(readFile).not.toHaveBeenCalled();
             });
 

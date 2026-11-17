@@ -8,9 +8,9 @@ try {
             console.error(`起動できませんでした: ${error.message}`);
             process.exit(1);
         }
-        console.log(
-            `シンプルメモアプリ(RS)を起動しました: port ${config.port}(issuer: ${config.issuer}、audience: ${config.audience})`,
-        );
+        console.log('--------------------------------');
+        console.log(`リソースサーバーを起動しました`);
+        console.log('--------------------------------');
     });
 
     // 止める時に、データベースを閉じる

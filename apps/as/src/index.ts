@@ -22,7 +22,7 @@ try {
             process.exit(1);
         }
         console.log('--------------------------------');
-        console.log(`認可サーバーを起動しました: ${config.issuer}`);
+        console.log(`認可サーバーを起動しました`);
         console.log('--------------------------------');
     });
 } catch (error) {

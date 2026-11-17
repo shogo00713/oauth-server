@@ -2,11 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { loadClientsFromEnv } from './clients-from-env.js';
 import { sha256Hex } from './lib/hash.js';
 
+// 既定値は無いので、昔の既定値(memoboard、メモボード)とは違う値を使う
+const CLIENT_ID = 'test-client';
+const CLIENT_NAME = 'テストクライアント';
 // ちょうど 32 文字(下限)
 const SECRET = 'a'.repeat(32);
 const REDIRECT_URI = 'http://localhost:3000/callback';
 
+// 4 つとも必須(既定値は無い)
+const REQUIRED = [
+    'CLIENT_ID',
+    'CLIENT_NAME',
+    'CLIENT_SECRET',
+    'CLIENT_REDIRECT_URIS',
+] as const;
+
 const validEnv = (): Record<string, string | undefined> => ({
+    CLIENT_ID,
+    CLIENT_NAME,
     CLIENT_SECRET: SECRET,
     CLIENT_REDIRECT_URIS: REDIRECT_URI,
 });
@@ -32,18 +45,18 @@ const expectInvalid = (
 describe('CLIENTS FROM ENV 登録済みクライアントの読み込み', () => {
     describe('loadClientsFromEnv', () => {
         describe('読み込める例', () => {
-            it('必須の 2 つだけで、ID と名前は、既定値になる', () => {
+            it('4 つ全部を指定すれば、その値になる(クライアントは 1 つ)', () => {
                 expect(loadClientsFromEnv(validEnv())).toEqual([
                     {
-                        clientId: 'memoboard',
+                        clientId: CLIENT_ID,
                         secretHash: sha256Hex(SECRET),
-                        name: 'メモボード',
+                        name: CLIENT_NAME,
                         redirectUris: [REDIRECT_URI],
                     },
                 ]);
             });
 
-            it('全部指定すれば、その値になる', () => {
+            it('別の値を指定すれば、別の値になる', () => {
                 const secret = 'b'.repeat(40);
 
                 const clients = loadClientsFromEnv({
@@ -94,34 +107,37 @@ describe('CLIENTS FROM ENV 登録済みクライアントの読み込み', () =>
             });
 
             it.each([
-                { name: 'CLIENT_ID', key: 'clientId', expected: 'memoboard' },
-                { name: 'CLIENT_NAME', key: 'name', expected: 'メモボード' },
-            ])(
-                '空文字は、未設定として扱う(既定値になる): $name',
-                ({ name, key, expected }) => {
-                    const clients = loadClientsFromEnv({
-                        ...validEnv(),
-                        [name]: '',
-                    });
+                { name: '1 文字', value: 'a' },
+                { name: '英数字と、使える記号(_ . - ~)', value: 'A_b.c-9~' },
+            ])('CLIENT_ID に使える: $name', ({ value }) => {
+                const clients = loadClientsFromEnv({
+                    ...validEnv(),
+                    CLIENT_ID: value,
+                });
 
-                    expect(clients[0]).toMatchObject({ [key]: expected });
-                },
-            );
+                expect(clients[0]?.clientId).toBe(value);
+            });
+
+            it('CLIENT_NAME は、空白や日本語を含んでいても、そのまま', () => {
+                const clients = loadClientsFromEnv({
+                    ...validEnv(),
+                    CLIENT_NAME: 'My アプリ 2',
+                });
+
+                expect(clients[0]?.name).toBe('My アプリ 2');
+            });
         });
 
         describe('throw になる場合', () => {
-            it.each(['CLIENT_SECRET', 'CLIENT_REDIRECT_URIS'])(
-                '必須なのに、無い: %s',
-                (name) => {
-                    const env = validEnv();
-                    delete env[name];
+            it.each(REQUIRED)('必須(既定値は無い)なのに、無い: %s', (name) => {
+                const env = validEnv();
+                delete env[name];
 
-                    expectInvalid(env, name);
-                },
-            );
+                expectInvalid(env, name);
+            });
 
-            it.each(['CLIENT_SECRET', 'CLIENT_REDIRECT_URIS'])(
-                '必須なのに、空文字: %s',
+            it.each(REQUIRED)(
+                '必須(既定値は無い)なのに、空文字: %s',
                 (name) => {
                     expectInvalid({ ...validEnv(), [name]: '' }, name);
                 },
@@ -139,6 +155,8 @@ describe('CLIENTS FROM ENV 登録済みクライアントの読み込み', () =>
                 { name: 'コロンを含む', value: 'my:app' },
                 { name: 'スラッシュを含む', value: 'a/b' },
                 { name: '日本語', value: 'メモ' },
+                { name: '改行を含む', value: 'my\napp' },
+                { name: '末尾が改行', value: 'my-app\n' },
             ])('CLIENT_ID が不正: $name', ({ value }) => {
                 expectInvalid({ ...validEnv(), CLIENT_ID: value }, 'CLIENT_ID');
             });
@@ -172,15 +190,28 @@ describe('CLIENTS FROM ENV 登録済みクライアントの読み込み', () =>
         });
 
         describe('エラーメッセージ', () => {
+            it('何も無ければ、4 つ全部の名前が入る', () => {
+                const message = messageOf(() => loadClientsFromEnv({}));
+
+                for (const name of REQUIRED) {
+                    expect(message).toContain(name);
+                }
+            });
+
             it('悪い環境変数が複数あれば、全部の名前が入る', () => {
                 const message = messageOf(() =>
                     loadClientsFromEnv({
+                        CLIENT_ID,
+                        CLIENT_NAME,
+                        CLIENT_SECRET: 'short',
                         CLIENT_REDIRECT_URIS: 'not-a-url',
                     }),
                 );
 
                 expect(message).toContain('CLIENT_SECRET');
                 expect(message).toContain('CLIENT_REDIRECT_URIS');
+                expect(message).not.toContain('CLIENT_ID');
+                expect(message).not.toContain('CLIENT_NAME');
             });
 
             it('悪くない環境変数の名前は、入らない', () => {
@@ -195,6 +226,12 @@ describe('CLIENTS FROM ENV 登録済みクライアントの読み込み', () =>
                 expect(message).not.toContain('CLIENT_REDIRECT_URIS');
                 expect(message).not.toContain('CLIENT_ID');
                 expect(message).not.toContain('CLIENT_NAME');
+            });
+
+            it('「環境変数が不正です」と、書いてある', () => {
+                const message = messageOf(() => loadClientsFromEnv({}));
+
+                expect(message).toContain('環境変数が不正です');
             });
 
             it('secret の値そのものは、メッセージに入らない', () => {

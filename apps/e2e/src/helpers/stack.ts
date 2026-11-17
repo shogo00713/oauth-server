@@ -183,6 +183,7 @@ export async function startStack(): Promise<Stack> {
                 SIGNING_KEY_PATH: privateKeyPath,
                 SESSION_SECRET: randomSecret(),
                 CLIENT_ID: clientId,
+                CLIENT_NAME: 'メモボード',
                 CLIENT_SECRET: clientSecret,
                 CLIENT_REDIRECT_URIS: redirectUri,
                 USER_NAME: username,
@@ -193,7 +194,7 @@ export async function startStack(): Promise<Stack> {
             name: 'RS',
             dir: 'rs',
             port: rsPort,
-            ready: 'シンプルメモアプリ(RS)を起動しました',
+            ready: 'リソースサーバーを起動しました',
             env: {
                 ISSUER: issuer,
                 PORT: String(rsPort),
@@ -206,7 +207,7 @@ export async function startStack(): Promise<Stack> {
             name: 'client',
             dir: 'client',
             port: clientPort,
-            ready: 'メモボード(client)を起動しました',
+            ready: 'クライアントを起動しました',
             env: {
                 BASE_URL: clientBaseUrl,
                 PORT: String(clientPort),
